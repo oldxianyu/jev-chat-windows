@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Jev 判断 API 客户端：OpenRouter 或 TypeSafe 直连。
+"""Jev 判断 API 客户端：OpenRouter、TypeSafe 直连或自定义兼容地址。
 
-TypeSafe 直连走官方 `typesafe_sdk`；OpenRouter 这条是唯一自己拼 HTTP 的路——
+TypeSafe 直连和自定义地址都走官方 `typesafe_sdk`；OpenRouter 这条是唯一自己拼 HTTP 的路——
 SDK 把路径写死成 `/v1/systemone`，打不到 OpenRouter 的 `/api/alpha/decisions`。
 两条路返回同一个 dict 形状，engine 不关心跑的是哪条。key 只从环境变量读，绝不打进日志。
 """
@@ -86,17 +86,26 @@ def _error_body(exc: urllib.error.HTTPError) -> str:
 
 
 def ask(state: dict, questions: dict, timeout: float = 20,
-        provider: str = "openrouter", model: str | None = None) -> dict:
+        provider: str = "openrouter", model: str | None = None,
+        base_url: str | None = None) -> dict:
     """问 Jev 一轮判断，返回 {"answers": {名字: 答案}, "usage": {...}}。
 
-    provider ∈ JEV_PROVIDERS（openrouter / typesafe 直连）；model=None 用该来源的默认模型。
+    provider ∈ JEV_PROVIDERS；自定义来源使用 TypeSafe API 根地址。
+    model=None 用该来源的默认模型。
     两条路返回的 dict 形状一模一样，429/529 都会退避重试。绝不打印或写出 key。
     """
     spec = JEV_PROVIDERS.get(provider) or JEV_PROVIDERS["openrouter"]
-    key = _api_key(JEV_ENV)  # 两家共用同一把 key，换来源不用重填
+    key = _api_key(JEV_ENV)  # 判断来源共用一把 key，换来源不用重填
     model = model or spec.default
-    if provider == "typesafe":
-        return _ask_typesafe(state, questions, key, model, timeout)
+    if not model:
+        raise JevError("请先填写 Jev 模型 ID")
+    if provider in ("typesafe", "custom_typesafe"):
+        if provider == "custom_typesafe":
+            base_url = (base_url or "").strip()
+            if not base_url:
+                raise JevError("Jev 自定义来源需要 Base URL")
+        return _ask_typesafe(state, questions, key, model, timeout,
+                             base_url=base_url or TYPESAFE_BASE)
     return _ask_openrouter(state, questions, key, model, timeout)
 
 
@@ -112,14 +121,15 @@ def _answer(answer) -> dict:
             "probabilities": {str(k): v for k, v in answer.probabilities.items()}}
 
 
-def _ask_typesafe(state: dict, questions: dict, key: str, model: str, timeout: float) -> dict:
+def _ask_typesafe(state: dict, questions: dict, key: str, model: str, timeout: float,
+                  base_url: str = TYPESAFE_BASE) -> dict:
     """官方 typesafe_sdk。questions 原样传：core/questions.py 里那几个 dict 本身就是 SDK 的
     NoulModel / ChoiceModel / ScoreModel（SDK 的 normalize_questions 认 dict），不用再包一层对象。
     重试用 RetryPolicy 的默认值——它本来就重试 408/429/5xx（含 529）并退避。"""
     import typesafe_sdk
 
     try:
-        with typesafe_sdk.TypeSafeClient(api_key=key, base_url=TYPESAFE_BASE, model=model,
+        with typesafe_sdk.TypeSafeClient(api_key=key, base_url=base_url, model=model,
                                          timeout=timeout) as client:
             result = client.system_one(state, questions, model=model)
     except Exception as exc:
@@ -203,13 +213,20 @@ def _check_openrouter_key(key: str, timeout: float) -> None:
             f"取模型列表失败: {redact_secrets(getattr(exc, 'reason', exc))}") from None
 
 
-def list_models(provider: str, key: str, timeout: float = 10) -> list[str]:
+def list_models(provider: str, key: str, timeout: float = 10,
+                base_url: str | None = None) -> list[str]:
     """某家能用的 Jev 模型 id，去重排序。失败抛 JevError（设置页直接显示这句话）。"""
-    if provider == "typesafe":
+    if provider in ("typesafe", "custom_typesafe"):
         import typesafe_sdk
 
+        if provider == "custom_typesafe":
+            base_url = (base_url or "").strip()
+            if not base_url:
+                raise JevError("Jev 自定义来源需要 Base URL")
+        else:
+            base_url = TYPESAFE_BASE
         try:
-            with typesafe_sdk.TypeSafeClient(api_key=key, base_url=TYPESAFE_BASE,
+            with typesafe_sdk.TypeSafeClient(api_key=key, base_url=base_url,
                                              timeout=timeout) as client:
                 return sorted({m.name for m in client.models.list().models})
         except Exception as exc:

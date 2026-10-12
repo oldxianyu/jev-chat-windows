@@ -610,7 +610,7 @@ class Overlay:
         self._fetched.done.connect(self._models_fetched)
         self.jev = self._model_group(box, "判断 · Jev", "jev", providers.JEV_PROVIDERS)
         box.addWidget(self._hint(
-            "判断意图、紧张度，并给三条候选排序。两家给的是同一个 Jev，必填。"
+            "判断意图、紧张度，并给三条候选排序。支持 OpenRouter、TypeSafe 直连和自定义 Jev 协议，必填。"
         ))
         self.draft = self._model_group(box, "起草 · 语言模型", "draft", providers.DRAFT_PROVIDERS)
         box.addWidget(self._hint(
@@ -672,14 +672,18 @@ class Overlay:
         bind(group.providerBox, lambda: f"{T(title)} · {T('来源')}", "setAccessibleName")
         source_label.setBuddy(group.providerBox)
         box.addWidget(group.providerBox)
-        if kind == "draft":  # 只有两个「自定义」来源要自己填地址，别的来源这一行藏着
-            self.baseLabel = _label("Base URL", 13)
-            box.addWidget(self.baseLabel)
-            self.baseEdit = LineEdit()
-            bind(self.baseEdit, "https://你的服务/v1", "setPlaceholderText")
-            bind(self.baseEdit, "自定义来源 Base URL", "setAccessibleName")
-            self.baseLabel.setBuddy(self.baseEdit)
-            box.addWidget(self.baseEdit)
+        group.baseLabel = _label("Base URL", 13)
+        box.addWidget(group.baseLabel)
+        group.baseEdit = LineEdit()
+        bind(group.baseEdit, "https://你的Jev兼容服务" if kind == "jev" else "https://你的服务/v1",
+             "setPlaceholderText")
+        bind(group.baseEdit, "自定义来源 Base URL", "setAccessibleName")
+        group.baseLabel.setBuddy(group.baseEdit)
+        box.addWidget(group.baseEdit)
+        if kind == "jev":
+            group.baseHint = self._hint(
+                "Base URL 填服务根地址（不要带 /v1）；需兼容 Jev system_one 结构化调用，不是普通 OpenAI Chat Completions。")
+            box.addWidget(group.baseHint)
         key_label = _tlabel("密钥", 13)
         box.addWidget(key_label)
         group.keyEdit = PasswordLineEdit()
@@ -687,9 +691,7 @@ class Overlay:
         key_label.setBuddy(group.keyEdit)
         group.keyEdit.returnPressed.connect(self._save)
         box.addWidget(group.keyEdit)
-        box.addWidget(self._hint(
-            "OpenRouter 的 key 或 TypeSafe 的 key，看上面选的来源。" if kind == "jev"
-            else "上面选哪家就填哪家的 key；换来源重填一次，只存这一把。"))
+        box.addWidget(self._hint("上面选哪家就填哪家的 key；换来源重填一次，只存这一把。"))
         model_label = _tlabel("模型", 13)
         box.addWidget(model_label)
         row = QHBoxLayout()
@@ -737,15 +739,21 @@ class Overlay:
             if self._compact:
                 name = group.providerBox.fontMetrics().elidedText(name, Qt.ElideRight, 180)
             group.providerBox.setText(name)
-        custom = self._provider_of(self.draft) in providers.CUSTOM
-        self.baseLabel.setVisible(custom)
-        self.baseEdit.setVisible(custom)
+        for group in (self.jev, self.draft):
+            provider = self._provider_of(group)
+            custom = ((group.kind == "jev" and provider in providers.JEV_CUSTOM)
+                      or (group.kind == "draft" and provider in providers.CUSTOM))
+            group.baseLabel.setVisible(custom)
+            group.baseEdit.setVisible(custom)
+            if group.kind == "jev":
+                group.baseHint.setVisible(custom and not self._compact)
 
     def _fetch_models(self, group):
         """「获取模型」：拿填的 key（没填就拿存的）去问接口，网络调用丢后台线程。"""
         provider = self._provider_of(group)
-        custom = group.kind == "draft" and provider in providers.CUSTOM
-        base = self.baseEdit.text().strip() if custom else None
+        custom = ((group.kind == "jev" and provider in providers.JEV_CUSTOM)
+                  or (group.kind == "draft" and provider in providers.CUSTOM))
+        base = group.baseEdit.text().strip() if custom else None
         key = group.keyEdit.text().strip() or group.stored_key()
         if not key:
             bind(group.status, "先填密钥", "setText")
@@ -762,7 +770,7 @@ class Overlay:
         """后台线程：判断走 jev_client，起草按协议走 llm；失败把原因一起送回主线程。"""
         try:
             if group.kind == "jev":
-                models = jev_client.list_models(provider, key)
+                models = jev_client.list_models(provider, key, base_url=base)
             else:
                 spec = providers.DRAFT_PROVIDERS[provider]
                 models = llm.list_models(spec.protocol, base or spec.base, key, headers=spec.headers)
@@ -844,7 +852,8 @@ class Overlay:
         self.targetSwitch.setChecked(settings.reply_target())
         self._set_group(self.jev, settings.jev_provider(), settings.jev_model())
         self._set_group(self.draft, settings.draft_provider(), settings.draft_model())
-        self.baseEdit.setText(settings.draft_base_url())
+        self.jev.baseEdit.setText(settings.jev_base_url())
+        self.draft.baseEdit.setText(settings.draft_base_url())
         self.thinkingSwitch.setChecked(settings.thinking())
         self.updateSwitch.setChecked(settings.check_update())
         self.set_debug_switch(settings.debug_view())  # 屏蔽信号地拨，别在加载时开关一遍窗口
@@ -856,14 +865,19 @@ class Overlay:
         relationship = relationship or self.relEdit.text().strip()
         jev_provider = self._provider_of(self.jev)
         draft_provider = self._provider_of(self.draft)
-        base = self.baseEdit.text().strip()
+        jev_base = self.jev.baseEdit.text().strip()
+        draft_base = self.draft.baseEdit.text().strip()
         if not relationship:
             self._settings_feedback("请填写关系背景，或选择一个已有选项。", error=True)
             self.relEdit.setFocus()
             return
-        if draft_provider in providers.CUSTOM and not base:
+        if jev_provider in providers.JEV_CUSTOM and not jev_base:
             self._settings_feedback("自定义来源要填 Base URL。", error=True)
-            self.baseEdit.setFocus()
+            self.jev.baseEdit.setFocus()
+            return
+        if draft_provider in providers.CUSTOM and not draft_base:
+            self._settings_feedback("自定义来源要填 Base URL。", error=True)
+            self.draft.baseEdit.setFocus()
             return
         for group, provider in ((self.jev, jev_provider), (self.draft, draft_provider)):
             name = group.table[provider].name
@@ -881,10 +895,11 @@ class Overlay:
                           jev_provider_text=jev_provider,
                           jev_key_text=self.jev.keyEdit.text().strip() or None,
                           jev_model_text=self.jev.modelBox.text().strip(),
+                          jev_base_url_text=jev_base if jev_provider in providers.JEV_CUSTOM else "",
                           draft_provider_text=draft_provider,
                           llm_key_text=self.draft.keyEdit.text().strip() or None,
                           draft_model_text=self.draft.modelBox.text().strip(),
-                          draft_base_url_text=base,
+                          draft_base_url_text=draft_base,
                           reply_target_on=self.targetSwitch.isChecked(),
                           style_text=self.styleEdit.text().strip(),
                           thinking_on=self.thinkingSwitch.isChecked(),
