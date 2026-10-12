@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import (
     BodyLabel, CardWidget, CheckBox, ComboBox, EditableComboBox, FluentIcon as FIF,
     HyperlinkButton, IndeterminateProgressBar, LineEdit, PasswordLineEdit, PlainTextEdit,
-    PrimaryPushButton, PushButton, ScrollArea, SpinBox, SwitchButton, Theme, TransparentToolButton,
+    PrimaryPushButton, PushButton, ScrollArea, SwitchButton, Theme, TransparentToolButton,
     setCustomStyleSheet, setFont, setTheme, setThemeColor,
 )
 
@@ -556,8 +556,9 @@ class Overlay:
         box.addWidget(self._hint("候选本来就照着你最近发的消息模仿；这里可以再补一句你自己的口吻。"))
         context_label = _tlabel("参考上下文", 13)
         box.addWidget(context_label)
-        self.contextBox = SpinBox()
-        self.contextBox.setRange(3, 30)
+        self.contextBox = ComboBox()
+        self.contextBox.setMinimumWidth(0)
+        self.contextBox.addItems([str(n) for n in range(3, 31)])
         bind(self.contextBox, "参考的最近消息条数", "setAccessibleName")
         context_label.setBuddy(self.contextBox)
         box.addWidget(self.contextBox)
@@ -848,7 +849,7 @@ class Overlay:
         self.relEdit.setText(relationship if _RELATIONSHIPS[index][1] is None else "")
         self.relEdit.setVisible(_RELATIONSHIPS[index][1] is None)
         self.styleEdit.setText(settings.style())
-        self.contextBox.setValue(settings.context())
+        self.contextBox.setCurrentIndex(settings.context() - 3)
         self.targetSwitch.setChecked(settings.reply_target())
         self._set_group(self.jev, settings.jev_provider(), settings.jev_model())
         self._set_group(self.draft, settings.draft_provider(), settings.draft_model())
@@ -891,7 +892,7 @@ class Overlay:
                 group.modelBox.setFocus()
                 return
         try:
-            settings.save(relationship, self.contextBox.value(),
+            settings.save(relationship, int(self.contextBox.currentText()),
                           jev_provider_text=jev_provider,
                           jev_key_text=self.jev.keyEdit.text().strip() or None,
                           jev_model_text=self.jev.modelBox.text().strip(),
