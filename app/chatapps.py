@@ -50,12 +50,17 @@ class ChatApp:
 
 WECHAT = ChatApp("wechat", "微信", ("weixin.exe", "wechat.exe"), "微信", (),
                  "rapidocr", "", _wechat_me)
+# Windows Enterprise WeChat's primary desktop process is WXWork.exe. The current
+# profile reuses the green outgoing-bubble rule and local Chinese OCR; UI details
+# still need confirmation against the user's installed WeCom version.
+WECOM = ChatApp("wecom", "企业微信", ("wxwork.exe", "wecom.exe", "wework.exe", "企业微信.exe"),
+                "企业微信", (), "rapidocr", "", _wechat_me)
 # KakaoTalk opens one window per conversation, so the roster ("카카오톡") is never the target;
 # the biggest remaining window is the chat that is actually being read.
 KAKAOTALK = ChatApp("kakaotalk", "카카오톡", ("kakaotalk.exe",), "", ("카카오톡", ""),
                     "windows", " ", _kakao_me, _kakao_notice_rows)
 
-APPS = {a.key: a for a in (WECHAT, KAKAOTALK)}
+APPS = {a.key: a for a in (WECHAT, WECOM, KAKAOTALK)}
 DEFAULT = WECHAT
 
 

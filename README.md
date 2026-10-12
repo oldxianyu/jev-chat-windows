@@ -1,6 +1,6 @@
 # JevChat-Windows
 
-本仓库只维护当前这一套识别。有能力的人可以 Fork 后自行适配别的聊天窗口，作者不提供这项适配，也不对 Fork 出去的改动负责。
+本仓库是 `oldxianyu` 的个人 Fork，在上游 Windows 版基础上增加企业微信窗口适配。本仓库不代表上游作者发布或背书；企业微信识别尚待目标电脑上的实际界面验证。
 
 ## 公众号
 
@@ -18,10 +18,10 @@
 
 **普通使用直接下载，不用装 Python、不用碰源码。** 后面的「源码运行」是给开发者的。
 
-👉 **[下载最新版](https://github.com/jev-chat/jev-chat-windows/releases/latest)**
+👉 **[打开本 Fork 的 Actions 构建页](https://github.com/oldxianyu/jev-chat-windows/actions)**
 
-1. 在 Releases 页下载 `jev-chat-windows-vX.Y.Z.zip`（约 146 MB）
-2. 解压到一个固定目录（整个文件夹一起，exe 要用旁边那堆文件）
+1. 打开最近一次成功的 `release` workflow，下载 `jev-chat-windows-wecom` 构建产物
+2. 解压产物中的 zip 到一个固定目录（整个文件夹一起，exe 要用旁边那堆文件）
 3. 双击 `jev-chat-windows.exe`
 
 要求：Windows 10 1903+ / 11，聊天窗口开着，两个 API key（判断一个、起草一个，见下）。
@@ -81,7 +81,10 @@ DeepSeek 官方 API（`api.deepseek.com`）国内直连，起草基本就是一�
 | 软件 | OCR | 自己的气泡 | 窗口 |
 |---|---|---|---|
 | 微信 | RapidOCR（中英文模型） | 绿色 | 标题为「微信」的主窗口 |
+| 企业微信（Windows） | RapidOCR（中英文模型） | 绿色（沿用微信规则） | `WXWork.exe` 主窗口，优先标题「企业微信」 |
 | KakaoTalk（韩国） | Windows.Media.Ocr（系统语言包，离线） | `#FEE500` | 一个对话一个窗口，主列表窗除外 |
+
+企业微信支持由本 Fork 新增，按 `WXWork.exe` 进程识别；如果企业微信和个人微信同时打开，优先使用当前前台聊天窗口。不同客户端版本、主题或窗口布局可能影响气泡颜色和消息区定位，实际兼容性需要在目标电脑上确认。
 
 RapidOCR 自带的只有中英文模型，韩文整段都是乱码：同一个 KakaoTalk 窗口实测 8 条气泡 0 条认对，
 一帧 2.0s，而且全被判成对方发的（气泡颜色规则只认微信绿）。韩文界面改走 Windows 自带 OCR 之后
@@ -258,7 +261,7 @@ MiniMax、Qwen 走 `/messages`，Grok、GPT 走 `/responses`，选了会失败�
 普通使用请直接用上面的[下载即用](#下载即用推荐)。想改代码、调 prompt、自己打包才需要这一节。
 
 ```bash
-git clone https://github.com/jev-chat/jev-chat-windows.git
+git clone https://github.com/oldxianyu/jev-chat-windows.git
 cd jev-chat-windows
 python -m venv .venv
 .venv\Scripts\activate

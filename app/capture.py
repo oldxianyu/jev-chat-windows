@@ -15,8 +15,10 @@ u32 = ctypes.windll.user32
 def find_chat_hwnd(want=None):
     """枚举可见顶层窗口，按进程名认出聊天软件，返回 (hwnd, ChatApp)。
     微信：同进程还有工具窗和看图窗，面积可能更大，所以按标题挑主窗口。
+    企业微信：优先标题为「企业微信」的主窗口，否则选该进程最大可见窗口。
     KakaoTalk：一个对话一个窗口，主列表窗（标题「카카오톡」）不是目标，挑剩下最大的那个。
-    want=某个 ChatApp 时只找它，None 时先到先得（两个都开着就按 APPS 顺序）。"""
+    同时开多个聊天软件时优先前台聊天窗口；前台不是聊天软件（例如点了本助手）时，
+    按 EnumWindows 返回顺序选最靠前的可见聊天软件。want=某个 ChatApp 时只找它。"""
     k32 = ctypes.windll.kernel32
     found = []
 
@@ -48,18 +50,17 @@ def find_chat_hwnd(want=None):
     u32.EnumWindows(cb, 0)
     if not found:
         raise RuntimeError("没找到聊天窗口，开着吗？")
-    for app in chatapps.APPS.values():
-        mine = [f for f in found if f[3] is app]
-        if not mine:
-            continue
-        if app.main_title:
-            hit = next((f for f in mine if f[1] == app.main_title), None)
-            if hit:
-                return hit[0], app
-        rooms = [f for f in mine if f[1] not in app.skip_titles] or mine
-        best = max(rooms, key=lambda f: f[2])
-        return best[0], app
-    raise RuntimeError("没找到聊天窗口，开着吗？")
+    foreground = u32.GetForegroundWindow()
+    active = next((f for f in found if f[0] == foreground), None)
+    app = (active or found[0])[3]
+    mine = [f for f in found if f[3] is app]
+    if app.main_title:
+        hit = next((f for f in mine if f[1] == app.main_title), None)
+        if hit:
+            return hit[0], app
+    rooms = [f for f in mine if f[1] not in app.skip_titles] or mine
+    best = max(rooms, key=lambda f: f[2])
+    return best[0], app
 
 
 def find_wechat_hwnd():

@@ -53,7 +53,7 @@ def who_said(chat, box, app: ChatApp = DEFAULT):
     绿底 → me；非绿且文字对底色对比度 ≥150 → her；其余（引用块、群里的发言人名、时间戳、系统提示、
     链接卡片描述——都是灰字，对比度 80~95）→ "gray"。
     实测：气泡正文对比度 178~208，me 绿泡 142~150，灰字 ≤ 93。深浅主题都靠这套。
-    哪种底色算 "me" 由 app.is_me 决定（微信绿 / KakaoTalk 黄）。
+    哪种底色算 "me" 由 app.is_me 决定（微信和企业微信绿 / KakaoTalk 黄）。
     墨高 = 框里最长一段连续有字的行数（OCR 框对小字有固定 padding、还会蹭到上下行，不能拿框高比大小）。"""
     xs, ys = [p[0] for p in box], [p[1] for p in box]
     reg = chat[int(min(ys)):int(max(ys)), int(min(xs)):int(max(xs))].astype(int)
