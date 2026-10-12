@@ -50,10 +50,9 @@ def read_title(header, app: ChatApp = DEFAULT):
 def who_said(chat, box, app: ChatApp = DEFAULT):
     """按 OCR 框里的颜色分类，不看 x 坐标。返回 (谁, 底色, 墨高)：
     先看底色平不平：框里众数颜色占比 <45% 就是图片（头像/照片/表情包）里的字 → None 丢掉。
-    绿底 → me；非绿且文字对底色对比度 ≥150 → her；其余（引用块、群里的发言人名、时间戳、系统提示、
-    链接卡片描述——都是灰字，对比度 80~95）→ "gray"。
-    实测：气泡正文对比度 178~208，me 绿泡 142~150，灰字 ≤ 93。深浅主题都靠这套。
-    哪种底色算 "me" 由 app.is_me 决定（微信和企业微信绿 / KakaoTalk 黄）。
+    app.is_me 判定为自己的气泡 → me；其余且文字对底色通道差 ≥150 → her；其余（引用块、群里的
+    发言人名、时间戳、系统提示、链接卡片描述——都是灰字，对比度 80~95）→ "gray"。
+    哪种底色算 "me" 由 app.is_me 决定（微信绿 / 企业微信蓝 / KakaoTalk 黄）。
     墨高 = 框里最长一段连续有字的行数（OCR 框对小字有固定 padding、还会蹭到上下行，不能拿框高比大小）。"""
     xs, ys = [p[0] for p in box], [p[1] for p in box]
     reg = chat[int(min(ys)):int(max(ys)), int(min(xs)):int(max(xs))].astype(int)
@@ -71,7 +70,7 @@ def who_said(chat, box, app: ChatApp = DEFAULT):
     for r in (diff > 60).any(axis=1):
         best = best + 1 if r else 0
         ink_h = max(ink_h, best)
-    if app.is_me(bg):  # 自己的气泡：微信是绿色，KakaoTalk 是 #FEE500（见 app/chatapps.py）
+    if app.is_me(bg):  # 自己的气泡颜色由各 app profile 决定（见 app/chatapps.py）
         return "me", bg, ink_h
     return ("her" if diff.max() >= 150 else "gray"), bg, ink_h
 

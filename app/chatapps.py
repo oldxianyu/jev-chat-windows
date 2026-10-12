@@ -17,6 +17,11 @@ def _wechat_me(bg: np.ndarray) -> bool:
     return bool(bg[1] > bg[0] + 40 and bg[1] > bg[2] + 40)
 
 
+def _wecom_me(bg: np.ndarray) -> bool:
+    """The user's WeCom outgoing bubble is light blue (#C9E7FF); incoming bubbles are gray."""
+    return bool(bg[2] > bg[0] + 30 and bg[2] > bg[1] + 8)
+
+
 def _kakao_me(bg: np.ndarray) -> bool:
     """KakaoTalk's own bubble is #FEE500: R and G high, B low. Measured on a live window;
     the chat ground is #BACEE0 and the other side is #FFFFFF, so both stay clear of this."""
@@ -50,11 +55,10 @@ class ChatApp:
 
 WECHAT = ChatApp("wechat", "微信", ("weixin.exe", "wechat.exe"), "微信", (),
                  "rapidocr", "", _wechat_me)
-# Windows Enterprise WeChat's primary desktop process is WXWork.exe. The current
-# profile reuses the green outgoing-bubble rule and local Chinese OCR; UI details
-# still need confirmation against the user's installed WeCom version.
+# Windows Enterprise WeChat's primary desktop process is WXWork.exe. In the user's
+# client, outgoing bubbles are blue (#C9E7FF) and incoming bubbles are gray (#E4E7EB).
 WECOM = ChatApp("wecom", "企业微信", ("wxwork.exe", "wecom.exe", "wework.exe", "企业微信.exe"),
-                "企业微信", (), "rapidocr", "", _wechat_me)
+                "企业微信", (), "rapidocr", "", _wecom_me)
 # KakaoTalk opens one window per conversation, so the roster ("카카오톡") is never the target;
 # the biggest remaining window is the chat that is actually being read.
 KAKAOTALK = ChatApp("kakaotalk", "카카오톡", ("kakaotalk.exe",), "", ("카카오톡", ""),
